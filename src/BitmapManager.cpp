@@ -14,9 +14,9 @@ BitmapManager::BitmapManager(VirtualDisk* virtualDisk, unsigned int offset, unsi
     bitmapCache = new char[bitmapSize];
     memset(bitmapCache, 0, bitmapSize);
     
-    cout << "[BitmapManager] Initialized at offset " << offset 
-         << ", tracking " << items << " items, bitmap size: " 
-         << bitmapSize << " bytes" << endl;
+    // cout << "[BitmapManager] Initialized at offset " << offset
+    //      << ", tracking " << items << " items, bitmap size: "
+    //      << bitmapSize << " bytes" << endl;
 }
 
 // Destructor
@@ -25,12 +25,12 @@ BitmapManager::~BitmapManager() {
         delete[] bitmapCache;
         bitmapCache = nullptr;
     }
-    cout << "[BitmapManager] Destroyed" << endl;
+    // cout << "[BitmapManager] Destroyed" << endl;
 }
 
 // Initialize bitmap (set all to free)
 bool BitmapManager::initialize() {
-    cout << "[BitmapManager] Initializing bitmap (all free)" << endl;
+    // cout << "[BitmapManager] Initializing bitmap (all free)" << endl;
     
     // Set all bits to 0 (free)
     memset(bitmapCache, 0, bitmapSize);
@@ -42,13 +42,13 @@ bool BitmapManager::initialize() {
     }
     
     isLoaded = true;
-    cout << "[BitmapManager] Bitmap initialized successfully" << endl;
+    // cout << "[BitmapManager] Bitmap initialized successfully" << endl;
     return true;
 }
 
 // Load bitmap from disk
 bool BitmapManager::load() {
-    cout << "[BitmapManager] Loading bitmap from disk at offset " << bitmapOffset << endl;
+    // cout << "[BitmapManager] Loading bitmap from disk at offset " << bitmapOffset << endl;
     
     if (!disk->readBlock(bitmapOffset, bitmapCache, bitmapSize)) {
         cerr << "[BitmapManager] ERROR: Failed to load bitmap from disk" << endl;
@@ -56,13 +56,13 @@ bool BitmapManager::load() {
     }
     
     isLoaded = true;
-    cout << "[BitmapManager] Bitmap loaded successfully" << endl;
+    // cout << "[BitmapManager] Bitmap loaded successfully" << endl;
     return true;
 }
 
 // Save bitmap to disk
 bool BitmapManager::save() {
-    cout << "[BitmapManager] Saving bitmap to disk at offset " << bitmapOffset << endl;
+    // cout << "[BitmapManager] Saving bitmap to disk at offset " << bitmapOffset << endl;
     
     if (!disk->writeBlock(bitmapOffset, bitmapCache, bitmapSize)) {
         cerr << "[BitmapManager] ERROR: Failed to save bitmap to disk" << endl;
@@ -70,7 +70,7 @@ bool BitmapManager::save() {
     }
     
     disk->flush();
-    cout << "[BitmapManager] Bitmap saved successfully" << endl;
+    // cout << "[BitmapManager] Bitmap saved successfully" << endl;
     return true;
 }
 
@@ -92,7 +92,7 @@ int BitmapManager::allocate() {
     // Mark as used
     BitmapUtils::setBit(bitmapCache, freeIndex);
     
-    cout << "[BitmapManager] Allocated item at index " << freeIndex << endl;
+    // cout << "[BitmapManager] Allocated item at index " << freeIndex << endl;
     
     // Save to disk
     save();
@@ -120,7 +120,7 @@ bool BitmapManager::deallocate(unsigned int index) {
     // Clear the bit
     BitmapUtils::clearBit(bitmapCache, index);
     
-    cout << "[BitmapManager] Deallocated item at index " << index << endl;
+    // cout << "[BitmapManager] Deallocated item at index " << index << endl;
     
     // Save to disk
     save();
