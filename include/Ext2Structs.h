@@ -1,7 +1,7 @@
 #ifndef EXT2STRUCTS_H
 #define EXT2STRUCTS_H
 
-#include <cstdint> //provided fixed length integer types (int32_t,uint64_t)
+#include <cstdint>
 #include <ctime>
 
 // Constants
@@ -11,6 +11,9 @@ const unsigned int TOTAL_INODES = 1024;            // Max 1024 files/directories
 const unsigned int INODE_SIZE = 128;               // Size of each inode structure
 const unsigned int DIRECT_BLOCKS = 12;             // Number of direct block pointers
 const unsigned int MAX_FILENAME_LENGTH = 255;      // Maximum filename length
+
+// Sentinel value meaning "no block assigned" - using max uint32 so block 0 is a valid real block
+const uint32_t NULL_BLOCK = 0xFFFFFFFF;
 
 // Magic number to identify EXT2 file system
 const uint32_t EXT2_MAGIC = 0xEF53;
@@ -40,7 +43,7 @@ struct Superblock {
     uint32_t rootInodeNumber;          // Root directory inode number (usually 0)
     
     // Padding to make superblock exactly 1 block (1024 bytes)
-    char padding[1024 - 11 * sizeof(uint32_t)]; //there are actually 12 uint32_t fields not 11. need to change later
+    char padding[1024 - 11 * sizeof(uint32_t)];
     
     // Default constructor
     Superblock() {
@@ -66,7 +69,7 @@ struct Superblock {
 // Inode structure - stores metadata for files and directories
 struct Inode {
     uint16_t type;                     // File type (file or directory)
-    uint16_t permissions;              // File permissions (not fully implemented yet...)
+    uint16_t permissions;              // File permissions (not fully implemented)
     uint32_t size;                     // File size in bytes
     uint32_t blockCount;               // Number of blocks used
     
@@ -91,11 +94,13 @@ struct Inode {
         createdTime = 0;
         modifiedTime = 0;
         accessedTime = 0;
-        singleIndirect = 0;
-        doubleIndirect = 0;
+        // NULL_BLOCK (0xFFFFFFFF) means "no block assigned"
+        // This allows block number 0 to be a valid real data block
+        singleIndirect = NULL_BLOCK;
+        doubleIndirect = NULL_BLOCK;
         
         for (unsigned int i = 0; i < DIRECT_BLOCKS; i++) {
-            directBlocks[i] = 0;
+            directBlocks[i] = NULL_BLOCK;
         }
         
         for (size_t i = 0; i < sizeof(padding); i++) {
@@ -132,17 +137,17 @@ public:
     static void setBit(char* bitmap, unsigned int index) {
         unsigned int byteIndex = index / 8;
         unsigned int bitIndex = index % 8;
-        bitmap[byteIndex] |= (1 << bitIndex); //bitwise or to set the bit to 1
+        bitmap[byteIndex] |= (1 << bitIndex);
     }
     
     // Clear a bit to 0 (mark as free)
     static void clearBit(char* bitmap, unsigned int index) {
         unsigned int byteIndex = index / 8;
         unsigned int bitIndex = index % 8;
-        bitmap[byteIndex] &= ~(1 << bitIndex); //bitwise and to free the bit 
+        bitmap[byteIndex] &= ~(1 << bitIndex);
     }
     
-    // Test if a bit is set , itis used for checking if there are free bits
+    // Test if a bit is set
     static bool testBit(const char* bitmap, unsigned int index) {
         unsigned int byteIndex = index / 8;
         unsigned int bitIndex = index % 8;
