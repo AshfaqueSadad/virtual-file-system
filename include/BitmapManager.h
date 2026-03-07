@@ -11,8 +11,7 @@ private:
     unsigned int bitmapOffset;     // Offset of bitmap on disk
     unsigned int bitmapSize;       // Size of bitmap in bytes
     unsigned int maxItems;         // Maximum number of items this bitmap tracks
-    char* bitmapCache;             // In-memory cache of bitmap , a pointer to an in memory cache of the bitmap
-                                   // bitmap cache stores the bitmap data temporarily in memory, so operation of the bitmap can be performed faster
+    char* bitmapCache;             // In-memory cache of bitmap
     bool isLoaded;
 
 public:
