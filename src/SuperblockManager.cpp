@@ -6,17 +6,17 @@ using namespace std;
 // Constructor
 SuperblockManager::SuperblockManager(VirtualDisk* virtualDisk)
     : disk(virtualDisk), isLoaded(false) {
-    cout << "[SuperblockManager] Initialized" << endl;
+    // cout << "[SuperblockManager] Initialized" << endl;
 }
 
 // Destructor
 SuperblockManager::~SuperblockManager() {
-    cout << "[SuperblockManager] Destroyed" << endl;
+    // cout << "[SuperblockManager] Destroyed" << endl;
 }
 
 // Initialize superblock
 bool SuperblockManager::initialize() {
-    cout << "[SuperblockManager] Initializing new superblock" << endl;
+    // cout << "[SuperblockManager] Initializing new superblock" << endl;
     
     // Create default superblock
     superblock = Superblock();
@@ -50,11 +50,11 @@ bool SuperblockManager::initialize() {
     
     isLoaded = true;
     
-    cout << "[SuperblockManager] Superblock initialized" << endl;
-    cout << "  Inode Bitmap Offset: " << superblock.inodeBitmapOffset << endl;
-    cout << "  Block Bitmap Offset: " << superblock.blockBitmapOffset << endl;
-    cout << "  Inode Table Offset: " << superblock.inodeTableOffset << endl;
-    cout << "  Data Blocks Offset: " << superblock.dataBlocksOffset << endl;
+    // cout << "[SuperblockManager] Superblock initialized" << endl;
+    // cout << "  Inode Bitmap Offset: " << superblock.inodeBitmapOffset << endl;
+    // cout << "  Block Bitmap Offset: " << superblock.blockBitmapOffset << endl;
+    // cout << "  Inode Table Offset: " << superblock.inodeTableOffset << endl;
+    // cout << "  Data Blocks Offset: " << superblock.dataBlocksOffset << endl;
     
     // Save to disk
     return save();
@@ -62,7 +62,7 @@ bool SuperblockManager::initialize() {
 
 // Load superblock from disk
 bool SuperblockManager::load() {
-    cout << "[SuperblockManager] Loading superblock from disk" << endl;
+    // cout << "[SuperblockManager] Loading superblock from disk" << endl;
     
     char buffer[BLOCK_SIZE];
     
@@ -80,13 +80,13 @@ bool SuperblockManager::load() {
     }
     
     isLoaded = true;
-    cout << "[SuperblockManager] Superblock loaded successfully" << endl;
+    // cout << "[SuperblockManager] Superblock loaded successfully" << endl;
     return true;
 }
 
 // Save superblock to disk
 bool SuperblockManager::save() {
-    cout << "[SuperblockManager] Saving superblock to disk" << endl;
+    // cout << "[SuperblockManager] Saving superblock to disk" << endl;
     
     char buffer[BLOCK_SIZE];
     memset(buffer, 0, BLOCK_SIZE);
@@ -100,7 +100,7 @@ bool SuperblockManager::save() {
     }
     
     disk->flush();
-    cout << "[SuperblockManager] Superblock saved successfully" << endl;
+    // cout << "[SuperblockManager] Superblock saved successfully" << endl;
     return true;
 }
 
