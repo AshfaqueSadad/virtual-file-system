@@ -3,7 +3,7 @@ echo ========================================
 echo Compiling EXT-2 File System Simulator
 echo ========================================
 
-g++ -std=c++11 -Wall -o ext2sim VirtualDisk.cpp BitmapManager.cpp SuperblockManager.cpp InodeManager.cpp BlockManager.cpp FileManager.cpp DirectoryHandler.cpp PathParser.cpp main.cpp
+g++ -std=c++11 -o ext2sim VirtualDisk.cpp BitmapManager.cpp SuperblockManager.cpp InodeManager.cpp BlockManager.cpp FileManager.cpp DirectoryHandler.cpp PathParser.cpp main.cpp
 
 if %errorlevel% equ 0 (
     echo.
