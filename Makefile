@@ -1,10 +1,20 @@
 # EXT-2 File System Simulator Makefile
 
-CXX = g++
+CXX      = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -g
-TARGET = ext2sim
-OBJS = VirtualDisk.o BitmapManager.o SuperblockManager.o InodeManager.o \
-       BlockManager.o FileManager.o DirectoryHandler.o PathParser.o main.o
+TARGET   = ext2sim
+
+OBJS = VirtualDisk.o       \
+       BitmapManager.o     \
+       SuperblockManager.o \
+       InodeManager.o      \
+       BlockManager.o      \
+       EncryptionManager.o \
+       FileManager.o       \
+       DirectoryHandler.o  \
+       PathParser.o        \
+       Logger.o            \
+       main.o
 
 all: $(TARGET)
 
@@ -27,7 +37,10 @@ InodeManager.o: InodeManager.cpp InodeManager.h VirtualDisk.h Ext2Structs.h Bitm
 BlockManager.o: BlockManager.cpp BlockManager.h VirtualDisk.h Ext2Structs.h BitmapManager.h SuperblockManager.h
 	$(CXX) $(CXXFLAGS) -c BlockManager.cpp
 
-FileManager.o: FileManager.cpp FileManager.h VirtualDisk.h Ext2Structs.h InodeManager.h BlockManager.h
+EncryptionManager.o: EncryptionManager.cpp EncryptionManager.h
+	$(CXX) $(CXXFLAGS) -c EncryptionManager.cpp
+
+FileManager.o: FileManager.cpp FileManager.h VirtualDisk.h Ext2Structs.h InodeManager.h BlockManager.h EncryptionManager.h
 	$(CXX) $(CXXFLAGS) -c FileManager.cpp
 
 DirectoryHandler.o: DirectoryHandler.cpp DirectoryHandler.h VirtualDisk.h Ext2Structs.h InodeManager.h BlockManager.h FileManager.h PathParser.h
@@ -36,11 +49,16 @@ DirectoryHandler.o: DirectoryHandler.cpp DirectoryHandler.h VirtualDisk.h Ext2St
 PathParser.o: PathParser.cpp PathParser.h
 	$(CXX) $(CXXFLAGS) -c PathParser.cpp
 
-main.o: main.cpp VirtualDisk.h Ext2Structs.h BitmapManager.h SuperblockManager.h InodeManager.h BlockManager.h FileManager.h DirectoryHandler.h PathParser.h
+Logger.o: Logger.cpp Logger.h
+	$(CXX) $(CXXFLAGS) -c Logger.cpp
+
+main.o: main.cpp VirtualDisk.h Ext2Structs.h BitmapManager.h SuperblockManager.h \
+        InodeManager.h BlockManager.h FileManager.h DirectoryHandler.h PathParser.h \
+        EncryptionManager.h Logger.h
 	$(CXX) $(CXXFLAGS) -c main.cpp
 
 clean:
-	rm -f $(OBJS) $(TARGET) disk.img
+	rm -f $(OBJS) $(TARGET) disk.img fs_log.txt
 	@echo "Clean complete"
 
 run: $(TARGET)
