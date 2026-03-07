@@ -7,19 +7,20 @@ using namespace std;
 // Constructor
 InodeManager::InodeManager(VirtualDisk* virtualDisk, SuperblockManager* sbMgr, BitmapManager* inodeBmp)
     : disk(virtualDisk), superblockMgr(sbMgr), inodeBitmap(inodeBmp) {
-    
-    inodeTableOffset = sbMgr->getInodeTableOffset();
-    cout << "[InodeManager] Initialized with inode table at offset " << inodeTableOffset << endl;
+    // NOTE: we do NOT cache the offset here — we always read it live from
+    // superblockMgr so that managers created BEFORE formatFileSystem() still
+    // use the correct offset after initialization.
+    // cout << "[InodeManager] Initialized" << endl;
 }
 
 // Destructor
 InodeManager::~InodeManager() {
-    cout << "[InodeManager] Destroyed" << endl;
+    // cout << "[InodeManager] Destroyed" << endl;
 }
 
 // Allocate a new inode
 int InodeManager::allocateInode(InodeType type) {
-    cout << "[InodeManager] Allocating new inode of type " << type << endl;
+    // cout << "[InodeManager] Allocating new inode of type " << type << endl;
     
     // Allocate from bitmap
     int inodeNumber = inodeBitmap->allocate();
@@ -39,12 +40,12 @@ int InodeManager::allocateInode(InodeType type) {
     inode.modifiedTime = inode.createdTime;
     inode.accessedTime = inode.createdTime;
     
-    // Initialize block pointers to 0
+    // Initialize block pointers to NULL_BLOCK (not 0, because block #0 is valid)
     for (int i = 0; i < DIRECT_BLOCKS; i++) {
-        inode.directBlocks[i] = 0;
+        inode.directBlocks[i] = NULL_BLOCK;
     }
-    inode.singleIndirect = 0;
-    inode.doubleIndirect = 0;
+    inode.singleIndirect = NULL_BLOCK;
+    inode.doubleIndirect = NULL_BLOCK;
     
     // Write inode to disk
     if (!writeInode(inodeNumber, inode)) {
@@ -56,13 +57,13 @@ int InodeManager::allocateInode(InodeType type) {
     // Update superblock
     superblockMgr->decrementFreeInodes();
     
-    cout << "[InodeManager] Allocated inode #" << inodeNumber << endl;
+    // cout << "[InodeManager] Allocated inode #" << inodeNumber << endl;
     return inodeNumber;
 }
 
 // Deallocate an inode
 bool InodeManager::deallocateInode(unsigned int inodeNumber) {
-    cout << "[InodeManager] Deallocating inode #" << inodeNumber << endl;
+    // cout << "[InodeManager] Deallocating inode #" << inodeNumber << endl;
     
     if (!inodeExists(inodeNumber)) {
         cerr << "[InodeManager] ERROR: Inode #" << inodeNumber << " does not exist" << endl;
@@ -78,7 +79,7 @@ bool InodeManager::deallocateInode(unsigned int inodeNumber) {
     // Update superblock
     superblockMgr->incrementFreeInodes();
     
-    cout << "[InodeManager] Deallocated inode #" << inodeNumber << endl;
+    // cout << "[InodeManager] Deallocated inode #" << inodeNumber << endl;
     return true;
 }
 
@@ -89,10 +90,10 @@ bool InodeManager::readInode(unsigned int inodeNumber, Inode& inode) {
         return false;
     }
     
-    // Calculate offset in inode table
-    unsigned int offset = inodeTableOffset + (inodeNumber * INODE_SIZE);
+    // Calculate offset in inode table — always read live so format/load order doesn't matter
+    unsigned int offset = superblockMgr->getInodeTableOffset() + (inodeNumber * INODE_SIZE);
     
-    cout << "[InodeManager] Reading inode #" << inodeNumber << " from offset " << offset << endl;
+    // cout << "[InodeManager] Reading inode #" << inodeNumber << " from offset " << offset << endl;
     
     char buffer[INODE_SIZE];
     
@@ -114,10 +115,10 @@ bool InodeManager::writeInode(unsigned int inodeNumber, const Inode& inode) {
         return false;
     }
     
-    // Calculate offset in inode table
-    unsigned int offset = inodeTableOffset + (inodeNumber * INODE_SIZE);
+    // Calculate offset in inode table — always read live so format/load order doesn't matter
+    unsigned int offset = superblockMgr->getInodeTableOffset() + (inodeNumber * INODE_SIZE);
     
-    cout << "[InodeManager] Writing inode #" << inodeNumber << " to offset " << offset << endl;
+    // cout << "[InodeManager] Writing inode #" << inodeNumber << " to offset " << offset << endl;
     
     char buffer[INODE_SIZE];
     memset(buffer, 0, INODE_SIZE);
@@ -172,13 +173,13 @@ bool InodeManager::addBlockToInode(unsigned int inodeNumber, uint32_t blockNumbe
     
     // Find first empty direct block pointer
     for (int i = 0; i < DIRECT_BLOCKS; i++) {
-        if (inode.directBlocks[i] == 0) {
+        if (inode.directBlocks[i] == NULL_BLOCK) {
             inode.directBlocks[i] = blockNumber;
             inode.blockCount++;
             inode.modifiedTime = time(nullptr);
             
-            cout << "[InodeManager] Added block " << blockNumber 
-                 << " to inode #" << inodeNumber << " at position " << i << endl;
+            // cout << "[InodeManager] Added block " << blockNumber
+            //      << " to inode #" << inodeNumber << " at position " << i << endl;
             
             return writeInode(inodeNumber, inode);
         }
@@ -215,7 +216,7 @@ void InodeManager::printInode(unsigned int inodeNumber) const {
     cout << "Modified: " << ctime(&inode.modifiedTime);
     cout << "Direct Blocks: ";
     for (int i = 0; i < DIRECT_BLOCKS; i++) {
-        if (inode.directBlocks[i] != 0) {
+        if (inode.directBlocks[i] != NULL_BLOCK) {
             cout << inode.directBlocks[i] << " ";
         }
     }
