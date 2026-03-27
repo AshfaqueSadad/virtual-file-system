@@ -11,38 +11,42 @@
 
 class FileManager {
 private:
-    VirtualDisk* disk;
-    InodeManager* inodeMgr;
-    BlockManager* blockMgr;
-    EncryptionManager* encryptMgr;   // NEW: encryption support (may be nullptr)
+    VirtualDisk*       disk;
+    InodeManager*      inodeMgr;
+    BlockManager*      blockMgr;
+    EncryptionManager* encryptMgr;   // May be nullptr (encryption disabled)
+
+    // Read raw block data for 'inode' into a caller-supplied buffer
+    bool readBlocks(const Inode& inode, char* buf, unsigned int size);
+
+    // Write raw block data from a caller-supplied buffer into 'inode'
+    bool writeBlocks(Inode& inode, const char* buf, unsigned int size);
 
 public:
-    // Constructor - encryptMgr may be nullptr (encryption off)
+    // encryptMgr may be nullptr — encryption is then skipped
     FileManager(VirtualDisk* virtualDisk, InodeManager* inodeMgr,
                 BlockManager* blockMgr, EncryptionManager* encryptMgr = nullptr);
-
-    // Destructor
     ~FileManager();
 
-    // Create a new file (returns inode number or -1 on failure)
-    int createFile();
+    // Allocate a new empty file inode — returns inode number or -1
+    int  createFile();
 
-    // Delete a file
+    // Free all blocks and the inode for a file
     bool deleteFile(unsigned int inodeNumber);
 
-    // Write data to a file (data is encrypted if encryptMgr is active)
+    // Overwrite file content (encrypts if enabled)
     bool writeFile(unsigned int inodeNumber, const char* data, unsigned int size);
 
-    // Read data from a file (data is decrypted if encryptMgr is active)
+    // Read file content into buffer (decrypts if enabled)
     bool readFile(unsigned int inodeNumber, char* buffer, unsigned int size);
 
-    // Append data to a file
+    // Append data to existing file content
     bool appendFile(unsigned int inodeNumber, const char* data, unsigned int size);
 
-    // Get file size
+    // Return the size of the file in bytes
     unsigned int getFileSize(unsigned int inodeNumber);
 
-    // Truncate file (set size to 0, deallocate all blocks)
+    // Deallocate all blocks and reset size to 0
     bool truncateFile(unsigned int inodeNumber);
 };
 
