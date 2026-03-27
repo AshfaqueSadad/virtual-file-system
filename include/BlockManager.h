@@ -10,38 +10,40 @@
 
 class BlockManager {
 private:
-    VirtualDisk* disk;
+    VirtualDisk*       disk;
     SuperblockManager* superblockMgr;
-    BitmapManager* blockBitmap;
-    unsigned int dataBlocksOffset;
+    BitmapManager*     blockBitmap;
 
 public:
-    // Constructor
     BlockManager(VirtualDisk* virtualDisk, SuperblockManager* sbMgr, BitmapManager* blockBmp);
-    
-    // Destructor
     ~BlockManager();
-    
-    // Allocate a data block (returns block number or -1 on failure)
-    int allocateBlock();
-    
-    // Deallocate a data block
+
+    // Allocate a data block — returns block number or -1 on failure
+    int  allocateBlock();
+
+    // Free a previously allocated data block
     bool deallocateBlock(unsigned int blockNumber);
-    
-    // Read data from a block
+
+    // Read up to 'size' bytes from a block into 'buffer'
     bool readBlock(unsigned int blockNumber, char* buffer, unsigned int size);
-    
-    // Write data to a block
+
+    // Write 'size' bytes from 'buffer' into a block
     bool writeBlock(unsigned int blockNumber, const char* buffer, unsigned int size);
-    
-    // Clear a block (fill with zeros)
+
+    // Zero-fill a block
     bool clearBlock(unsigned int blockNumber);
-    
-    // Check if block is allocated
+
+    // Return true if block is currently allocated
     bool isBlockAllocated(unsigned int blockNumber) const;
-    
-    // Get block offset on disk
+
+    // Byte offset of this block on the disk image
     unsigned int getBlockOffset(unsigned int blockNumber) const;
+
+    // Number of free data blocks remaining
+    unsigned int getFreeBlockCount() const;
+
+    // Number of data blocks currently in use
+    unsigned int getUsedBlockCount() const;
 };
 
 #endif // BLOCKMANAGER_H
