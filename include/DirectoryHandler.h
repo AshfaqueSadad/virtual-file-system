@@ -12,12 +12,20 @@
 
 class DirectoryHandler {
 private:
-    VirtualDisk* disk;
+    VirtualDisk*  disk;
     InodeManager* inodeMgr;
     BlockManager* blockMgr;
-    FileManager* fileMgr;
+    FileManager*  fileMgr;
 
-    // Internal recursive search helper
+    // Read all raw entry bytes for a directory into a heap buffer.
+    // Caller must delete[] the returned pointer (or it is nullptr on failure).
+    char* loadEntries(unsigned int dirInode, unsigned int& outSize);
+
+    // Write a raw entry buffer back and update the directory inode on disk.
+    bool flushEntries(unsigned int dirInode, const char* buf,
+                      unsigned int newSize, Inode& dirInodeData);
+
+    // Recursive DFS used by search()
     void searchRecursive(unsigned int dirInode,
                          const std::string& target,
                          const std::string& currentPath,
@@ -26,41 +34,36 @@ private:
                          std::vector<std::string>& results);
 
 public:
-    // Constructor
     DirectoryHandler(VirtualDisk* virtualDisk, InodeManager* inodeMgr,
-                    BlockManager* blockMgr, FileManager* fileMgr);
-
-    // Destructor
+                     BlockManager* blockMgr, FileManager* fileMgr);
     ~DirectoryHandler();
 
-    // Create a new directory (returns inode number or -1 on failure)
-    int createDirectory();
+    // Allocate a new directory inode — returns inode number or -1
+    int  createDirectory();
 
-    // Delete a directory (must be empty)
+    // Free a directory (must be empty first)
     bool deleteDirectory(unsigned int inodeNumber);
 
-    // Add entry to directory
+    // Add a named entry pointing to entryInodeNumber
     bool addEntry(unsigned int dirInodeNumber, const std::string& name,
                   unsigned int entryInodeNumber, InodeType type);
 
-    // Remove entry from directory
+    // Remove a named entry from a directory
     bool removeEntry(unsigned int dirInodeNumber, const std::string& name);
 
-    // Find entry in directory (returns inode number or -1 if not found)
-    int findEntry(unsigned int dirInodeNumber, const std::string& name);
+    // Return inode number for 'name' in directory, or -1 if not found
+    int  findEntry(unsigned int dirInodeNumber, const std::string& name);
 
-    // List directory contents
+    // Return all entries in a directory
     std::vector<DirectoryEntry> listDirectory(unsigned int dirInodeNumber);
 
-    // Check if directory is empty
+    // Return true if the directory contains no entries
     bool isEmpty(unsigned int dirInodeNumber);
 
-    // Get directory entry count
+    // Return the number of entries in a directory
     unsigned int getEntryCount(unsigned int dirInodeNumber);
 
-    // NEW: Search entire FS tree for entries matching 'name'.
-    // matchFiles / matchDirs control what types are reported.
-    // Returns a list of full paths to all matches.
+    // Walk the entire FS tree searching for entries named 'name'
     std::vector<std::string> search(const std::string& name,
                                     bool matchFiles = true,
                                     bool matchDirs  = true);
