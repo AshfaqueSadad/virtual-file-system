@@ -6,41 +6,44 @@
 
 class VirtualDisk {
 private:
-    std::string diskFileName;
+    std::string  diskFileName;
     std::fstream diskFile;
     unsigned int diskSize;
-    bool isOpen;
+    bool         isOpen;
 
 public:
-    // Constructor
     VirtualDisk(const std::string& fileName, unsigned int size);
-    
-    // Destructor
     ~VirtualDisk();
-    
-    // Initialize and create a new disk file
+
+    // Create a new blank disk image
     bool create();
-    
-    // Open existing disk file
+
+    // Open an existing disk image
     bool open();
-    
-    // Close disk file
+
+    // Close the disk image
     void close();
-    
-    // Read data from disk at specific offset
+
+    // Low-level read at byte offset
     bool readBlock(unsigned int offset, char* buffer, unsigned int size);
-    
-    // Write data to disk at specific offset
+
+    // Low-level write at byte offset
     bool writeBlock(unsigned int offset, const char* buffer, unsigned int size);
-    
-    // Get disk size
-    unsigned int getSize() const;
-    
-    // Check if disk is open
-    bool getDiskStatus() const;
-    
-    // Flush changes to disk
+
+    // Flush pending writes to the underlying file
     void flush();
+
+    // Return the total disk capacity in bytes
+    unsigned int getSize() const;
+
+    // Return true if the disk image is currently open
+    bool getDiskStatus() const;
+
+    // Alias for getDiskStatus() — more expressive name
+    bool isReady() const;
+
+    // Return the disk image filename
+    std::string getDiskFileName() const;
 };
 
 #endif // VIRTUALDISK_H
