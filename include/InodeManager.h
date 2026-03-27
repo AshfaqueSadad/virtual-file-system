@@ -9,43 +9,48 @@
 
 class InodeManager {
 private:
-    VirtualDisk* disk;
+    VirtualDisk*       disk;
     SuperblockManager* superblockMgr;
-    BitmapManager* inodeBitmap;
-    unsigned int inodeTableOffset;
+    BitmapManager*     inodeBitmap;
 
 public:
-    // Constructor
     InodeManager(VirtualDisk* virtualDisk, SuperblockManager* sbMgr, BitmapManager* inodeBmp);
-    
-    // Destructor
     ~InodeManager();
-    
-    // Allocate a new inode (returns inode number or -1 on failure)
-    int allocateInode(InodeType type);
-    
-    // Deallocate an inode
+
+    // Allocate a new inode of the given type — returns inode number or -1
+    int  allocateInode(InodeType type);
+
+    // Free an allocated inode
     bool deallocateInode(unsigned int inodeNumber);
-    
-    // Read an inode from disk
+
+    // Read an inode from disk into 'inode'
     bool readInode(unsigned int inodeNumber, Inode& inode);
-    
-    // Write an inode to disk
+
+    // Persist an inode to disk
     bool writeInode(unsigned int inodeNumber, const Inode& inode);
-    
-    // Update inode size
+
+    // Convenience: update only the size field of an inode
     bool updateInodeSize(unsigned int inodeNumber, uint32_t newSize);
-    
-    // Update inode timestamps
+
+    // Convenience: refresh modification and access timestamps
     bool updateInodeTimestamps(unsigned int inodeNumber);
-    
-    // Add block pointer to inode
+
+    // Append a block pointer to the first free direct-block slot
     bool addBlockToInode(unsigned int inodeNumber, uint32_t blockNumber);
-    
-    // Check if inode exists
+
+    // Return true if the inode is allocated (bit set in bitmap)
     bool inodeExists(unsigned int inodeNumber) const;
-    
-    // Print inode information (for debugging)
+
+    // Byte offset of inode 'inodeNumber' within the inode table
+    unsigned int getInodeOffset(unsigned int inodeNumber) const;
+
+    // Number of free inodes remaining
+    unsigned int getFreeInodeCount() const;
+
+    // Number of inodes currently in use
+    unsigned int getUsedInodeCount() const;
+
+    // Dump inode metadata to stdout (debug helper)
     void printInode(unsigned int inodeNumber) const;
 };
 
