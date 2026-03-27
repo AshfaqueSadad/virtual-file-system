@@ -12,8 +12,9 @@
 #include "FileManager.h"
 #include "DirectoryHandler.h"
 #include "PathParser.h"
-#include "EncryptionManager.h"   // NEW
-#include "Logger.h"              // NEW
+#include "EncryptionManager.h"
+#include "Logger.h"
+#include "ShellHelper.h"
 
 using namespace std;
 
@@ -37,8 +38,8 @@ vector<unsigned int> directoryStack;   // stack of parent inode numbers for cd .
 bool verboseMode = false;
 
 // ── Helper: build a log detail string ────────────────────────────────────────
-// Small inline helper so cmd* functions can build detail strings concisely.
-static string ld(const string& s) { return s; }   // identity — keeps code readable
+// Identity helper — lets cmd* functions pass string literals to logger cleanly.
+static string ld(const string& s) { return s; }
 
 // ── File-system lifecycle ─────────────────────────────────────────────────────
 
@@ -92,27 +93,7 @@ bool loadFileSystem() {
 // ── Help ──────────────────────────────────────────────────────────────────────
 
 void showHelp() {
-    cout << "\n=== EXT-2 FILE SYSTEM COMMANDS ===" << endl;
-    cout << "format                    - Format the file system (WARNING: erases all data)" << endl;
-    cout << "mkdir <path>              - Create a new directory" << endl;
-    cout << "touch <file>              - Create a new empty file" << endl;
-    cout << "ls [path]                 - List directory contents" << endl;
-    cout << "cd <path>                 - Change current directory (supports cd ..)" << endl;
-    cout << "pwd                       - Print working directory" << endl;
-    cout << "write <file> <text>       - Write text to a file" << endl;
-    cout << "read <file>               - Read and display file contents" << endl;
-    cout << "rm <path>                 - Remove a file or empty directory" << endl;
-    cout << "cp <source> <dest>        - Copy a file to a new name" << endl;
-    cout << "mv <source> <dest>        - Rename a file or directory" << endl;
-    cout << "find <name> [-f|-d]       - Search entire FS for a file/dir by name" << endl;
-    cout << "                           (-f = files only, -d = directories only)" << endl;
-    cout << "info                      - Show file system statistics" << endl;
-    cout << "log                       - Show operation log" << endl;
-    cout << "log clear                 - Clear the operation log" << endl;
-    // cout << "encrypt on|off            - Toggle data encryption" << endl;
-    cout << "help                      - Show this help menu" << endl;
-    cout << "exit                      - Exit the file system simulator" << endl;
-    cout << "===================================\n" << endl;
+    ShellHelper::printHelp();
 }
 
 // ── Command parser ────────────────────────────────────────────────────────────
@@ -131,12 +112,16 @@ vector<string> parseCommand(const string& input) {
 
 void cmdMkdir(const vector<string>& args) {
     if (args.size() < 2) {
-        cout << "Usage: mkdir <path>" << endl;
+        cout << "Usage: mkdir <name>" << endl;
         return;
     }
 
-    string path    = args[1];
-    string dirName = PathParser::getBasename(path);
+    string dirName = args[1];
+
+    if (!PathParser::isValidName(dirName)) {
+        cout << "ERROR: Invalid directory name '" << dirName << "'" << endl;
+        return;
+    }
 
     int dirInode = dirHandler->createDirectory();
     if (dirInode == -1) {
@@ -167,6 +152,11 @@ void cmdTouch(const vector<string>& args) {
     }
 
     string fileName = args[1];
+
+    if (!PathParser::isValidName(fileName)) {
+        cout << "ERROR: Invalid file name '" << fileName << "'" << endl;
+        return;
+    }
 
     int fileInode = fileMgr->createFile();
     if (fileInode == -1) {
@@ -205,8 +195,7 @@ void cmdLs(const vector<string>& args) {
     cout << "\nDirectory listing:" << endl;
     cout << "==================" << endl;
     for (const DirectoryEntry& entry : entries) {
-        string type = (entry.fileType == TYPE_DIRECTORY) ? "[DIR] " : "[FILE]";
-        cout << type << " " << entry.name << endl;
+        ShellHelper::printDirEntry(entry);
     }
     cout << "\nTotal: " << entries.size() << " entries" << endl;
 
@@ -446,18 +435,22 @@ void cmdRm(const vector<string>& args) {
 // ── info ─────────────────────────────────────────────────────────────────────
 
 void cmdInfo() {
+    unsigned int inodesUsed = inodeMgr->getUsedInodeCount();
+    unsigned int inodesFree = inodeMgr->getFreeInodeCount();
+    unsigned int blocksUsed = blockMgr->getUsedBlockCount();
+    unsigned int blocksFree = blockMgr->getFreeBlockCount();
+
     cout << "\n=== FILE SYSTEM STATISTICS ===" << endl;
-    cout << "Inodes: " << inodeBitmap->countUsed() << " used, "
-         << inodeBitmap->countFree() << " free (total: " << TOTAL_INODES << ")" << endl;
-    cout << "Blocks: " << blockBitmap->countUsed() << " used, "
-         << blockBitmap->countFree() << " free (total: " << TOTAL_BLOCKS << ")" << endl;
+    cout << "Inodes: " << inodesUsed << " used, "
+         << inodesFree << " free (total: " << TOTAL_INODES << ")" << endl;
+    cout << "Blocks: " << blocksUsed << " used, "
+         << blocksFree << " free (total: " << TOTAL_BLOCKS << ")" << endl;
     cout << "Block Size: " << BLOCK_SIZE << " bytes" << endl;
-    cout << "Total Disk Size: " << (TOTAL_BLOCKS * BLOCK_SIZE) / 1024 / 1024 << " MB" << endl;
-    // cout << "Encryption: " << (encryptMgr && encryptMgr->isEnabled() ? "ENABLED" : "DISABLED") << endl;
+    cout << "Total Disk Size: " << ShellHelper::formatSize(TOTAL_BLOCKS * BLOCK_SIZE) << endl;
     cout << "==============================\n" << endl;
 
-    if (logger) logger->info("INFO", "inodes_used=" + to_string(inodeBitmap->countUsed()) +
-                              " blocks_used=" + to_string(blockBitmap->countUsed()));
+    if (logger) logger->info("INFO", "inodes_used=" + to_string(inodesUsed) +
+                              " blocks_used=" + to_string(blocksUsed));
 }
 
 // ── NEW: find ─────────────────────────────────────────────────────────────────
@@ -860,9 +853,7 @@ void interactiveShell() {
 // ── main ─────────────────────────────────────────────────────────────────────
 
 int main() {
-    cout << "===========================================" << endl;
-    cout << "  EXT-2 FILE SYSTEM SIMULATOR" << endl;
-    cout << "===========================================" << endl;
+    ShellHelper::printBanner();
 
     // ── Logger (must come first so startup events can be logged) ─────────────
     logger = new Logger("fs_log.txt");
