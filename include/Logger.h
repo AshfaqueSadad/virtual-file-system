@@ -12,29 +12,26 @@ enum LogLevel {
     LOG_ERROR = 2
 };
 
-// Logger - Records every FS operation to fs_log.txt with timestamp, level,
-// operation name, and a detail message.  Also supports printing the log to
-// the console via the 'log' shell command.
+// Logger — records every FS operation to fs_log.txt with timestamp, level,
+// operation name, and a detail message.
 class Logger {
 private:
-    std::string logFilePath;
+    std::string   logFilePath;
     std::ofstream logFile;
-    bool isOpen;
+    bool          isOpen;
+    unsigned int  entryCount;   // Total lines written since construction
 
-    // Format the current time as a human-readable string
+    // Return current wall-clock time as "YYYY-MM-DD HH:MM:SS"
     std::string currentTimestamp() const;
 
-    // Convert LogLevel to string tag
+    // Map a LogLevel to its short string tag
     std::string levelTag(LogLevel level) const;
 
 public:
-    // Constructor - opens (or creates) the log file
     Logger(const std::string& filePath = "fs_log.txt");
-
-    // Destructor - closes the log file
     ~Logger();
 
-    // Log an entry: log(LOG_INFO, "MKDIR", "name='docs' inode=3 SUCCESS")
+    // Core log call
     void log(LogLevel level, const std::string& operation, const std::string& details);
 
     // Convenience wrappers
@@ -42,14 +39,17 @@ public:
     void warn (const std::string& operation, const std::string& details);
     void error(const std::string& operation, const std::string& details);
 
-    // Print all log contents to stdout (used by 'log' shell command)
+    // Print all log contents to stdout (used by the 'log' shell command)
     void printLog() const;
 
-    // Clear the log file
+    // Erase the log file
     void clearLog();
 
-    // Check if logger is working
+    // Return true if the log file opened successfully
     bool isWorking() const;
+
+    // Return the number of log entries written so far
+    unsigned int getEntryCount() const;
 };
 
 #endif // LOGGER_H
