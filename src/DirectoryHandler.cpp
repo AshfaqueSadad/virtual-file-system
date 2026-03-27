@@ -1,324 +1,233 @@
 #include "DirectoryHandler.h"
 #include <cstring>
+#include <ctime>
 
 using namespace std;
 
-// Constructor
 DirectoryHandler::DirectoryHandler(VirtualDisk* virtualDisk, InodeManager* inodeMgr,
                                    BlockManager* blockMgr, FileManager* fileMgr)
-    : disk(virtualDisk), inodeMgr(inodeMgr), blockMgr(blockMgr), fileMgr(fileMgr) {
-    // cout << "[DirectoryHandler] Initialized" << endl;
+    : disk(virtualDisk), inodeMgr(inodeMgr), blockMgr(blockMgr), fileMgr(fileMgr) {}
+
+DirectoryHandler::~DirectoryHandler() {}
+
+// ── Private helpers ───────────────────────────────────────────────────────────
+
+char* DirectoryHandler::loadEntries(unsigned int dirInode, unsigned int& outSize) {
+    Inode inode;
+    if (!inodeMgr->readInode(dirInode, inode) || inode.size == 0) {
+        outSize = 0;
+        return nullptr;
+    }
+
+    outSize         = inode.size;
+    char* buf       = new char[outSize];
+    memset(buf, 0, outSize);
+
+    unsigned int blocksToRead = (outSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
+    unsigned int bytesRead    = 0;
+
+    for (unsigned int i = 0; i < blocksToRead && i < DIRECT_BLOCKS; i++) {
+        if (inode.directBlocks[i] == NULL_BLOCK) break;
+        unsigned int chunk = ((outSize - bytesRead) < BLOCK_SIZE)
+                             ? (outSize - bytesRead) : BLOCK_SIZE;
+        blockMgr->readBlock(inode.directBlocks[i], buf + bytesRead, chunk);
+        bytesRead += chunk;
+    }
+    return buf;
 }
 
-// Destructor
-DirectoryHandler::~DirectoryHandler() {
-    // cout << "[DirectoryHandler] Destroyed" << endl;
+bool DirectoryHandler::flushEntries(unsigned int dirInode, const char* buf,
+                                    unsigned int newSize, Inode& inode) {
+    unsigned int blocksNeeded = (newSize > 0) ? (newSize + BLOCK_SIZE - 1) / BLOCK_SIZE : 0;
+
+    if (blocksNeeded > DIRECT_BLOCKS) {
+        cerr << "[DirectoryHandler] ERROR: Directory too large" << endl;
+        return false;
+    }
+
+    // Allocate any new blocks required
+    for (unsigned int i = 0; i < blocksNeeded; i++) {
+        if (inode.directBlocks[i] == NULL_BLOCK) {
+            int blk = blockMgr->allocateBlock();
+            if (blk == -1) {
+                cerr << "[DirectoryHandler] ERROR: Disk full" << endl;
+                return false;
+            }
+            inode.directBlocks[i] = (unsigned int)blk;
+            inode.blockCount++;
+        }
+    }
+
+    // Write data blocks
+    unsigned int bytesWritten = 0;
+    for (unsigned int i = 0; i < blocksNeeded; i++) {
+        unsigned int chunk = ((newSize - bytesWritten) < BLOCK_SIZE)
+                             ? (newSize - bytesWritten) : BLOCK_SIZE;
+        blockMgr->writeBlock(inode.directBlocks[i], buf + bytesWritten, chunk);
+        bytesWritten += chunk;
+    }
+
+    inode.size         = newSize;
+    inode.modifiedTime = time(nullptr);
+    return inodeMgr->writeInode(dirInode, inode);
 }
 
-// Create a new directory
+// ── Public API ────────────────────────────────────────────────────────────────
+
 int DirectoryHandler::createDirectory() {
-    // cout << "[DirectoryHandler] Creating new directory" << endl;
-
     int inodeNumber = inodeMgr->allocateInode(TYPE_DIRECTORY);
-
     if (inodeNumber == -1) {
-        cerr << "[DirectoryHandler] ERROR: Failed to allocate inode for directory" << endl;
+        cerr << "[DirectoryHandler] ERROR: Failed to allocate directory inode" << endl;
         return -1;
     }
 
     Inode inode;
-    if (!inodeMgr->readInode(inodeNumber, inode)) {
-        cerr << "[DirectoryHandler] ERROR: Failed to read newly created inode" << endl;
-        inodeMgr->deallocateInode(inodeNumber);
+    if (!inodeMgr->readInode((unsigned int)inodeNumber, inode)) {
+        inodeMgr->deallocateInode((unsigned int)inodeNumber);
         return -1;
     }
-
-    inode.size = 0;
+    inode.size       = 0;
     inode.blockCount = 0;
+    inodeMgr->writeInode((unsigned int)inodeNumber, inode);
 
-    if (!inodeMgr->writeInode(inodeNumber, inode)) {
-        cerr << "[DirectoryHandler] ERROR: Failed to initialize inode" << endl;
-        inodeMgr->deallocateInode(inodeNumber);
-        return -1;
-    }
-
-    // cout << "[DirectoryHandler] Directory created with inode #" << inodeNumber << endl;
     return inodeNumber;
 }
 
-// Delete a directory (must be empty)
 bool DirectoryHandler::deleteDirectory(unsigned int inodeNumber) {
-    // cout << "[DirectoryHandler] Deleting directory with inode #" << inodeNumber << endl;
-
     if (!inodeMgr->inodeExists(inodeNumber)) {
-        cerr << "[DirectoryHandler] ERROR: Inode #" << inodeNumber << " does not exist" << endl;
+        cerr << "[DirectoryHandler] ERROR: Inode " << inodeNumber << " doesn't exist" << endl;
         return false;
     }
-
     if (!isEmpty(inodeNumber)) {
         cerr << "[DirectoryHandler] ERROR: Directory not empty" << endl;
         return false;
     }
 
     Inode inode;
-    if (!inodeMgr->readInode(inodeNumber, inode)) {
-        cerr << "[DirectoryHandler] ERROR: Failed to read inode" << endl;
-        return false;
-    }
+    if (!inodeMgr->readInode(inodeNumber, inode)) return false;
 
-    for (int i = 0; i < DIRECT_BLOCKS; i++) {
+    for (unsigned int i = 0; i < DIRECT_BLOCKS; i++) {
         if (inode.directBlocks[i] != NULL_BLOCK) {
             blockMgr->deallocateBlock(inode.directBlocks[i]);
         }
     }
-
-    if (!inodeMgr->deallocateInode(inodeNumber)) {
-        cerr << "[DirectoryHandler] ERROR: Failed to deallocate inode" << endl;
-        return false;
-    }
-
-    // cout << "[DirectoryHandler] Directory deleted successfully" << endl;
-    return true;
+    return inodeMgr->deallocateInode(inodeNumber);
 }
 
-// Add an entry to a directory
 bool DirectoryHandler::addEntry(unsigned int dirInodeNumber, const string& name,
-                               unsigned int entryInodeNumber, InodeType type) {
-    // cout << "[DirectoryHandler] Adding entry '" << name << "' to directory (inode #"
-    //      << dirInodeNumber << ")" << endl;
-
+                                unsigned int entryInodeNumber, InodeType type) {
     if (name.length() > MAX_FILENAME_LENGTH) {
         cerr << "[DirectoryHandler] ERROR: Filename too long" << endl;
         return false;
     }
-
     if (findEntry(dirInodeNumber, name) != -1) {
-        cerr << "[DirectoryHandler] ERROR: Entry '" << name << "' already exists" << endl;
+        cerr << "[DirectoryHandler] ERROR: '" << name << "' already exists" << endl;
         return false;
     }
 
     Inode dirInode;
-    if (!inodeMgr->readInode(dirInodeNumber, dirInode)) {
-        cerr << "[DirectoryHandler] ERROR: Failed to read directory inode" << endl;
-        return false;
-    }
+    if (!inodeMgr->readInode(dirInodeNumber, dirInode)) return false;
 
-    // Build the new DirectoryEntry
+    // Build new entry
     DirectoryEntry newEntry;
     newEntry.inodeNumber = entryInodeNumber;
-    newEntry.fileType = type;
-    newEntry.nameLength = name.length();
+    newEntry.fileType    = (uint8_t)type;
+    newEntry.nameLength  = (uint8_t)name.length();
+    newEntry.entryLength = sizeof(DirectoryEntry);
     strncpy(newEntry.name, name.c_str(), MAX_FILENAME_LENGTH);
     newEntry.name[name.length()] = '\0';
-    newEntry.entryLength = sizeof(DirectoryEntry);
 
-    unsigned int entryCount = dirInode.size / sizeof(DirectoryEntry);
-    unsigned int newSize    = (entryCount + 1) * sizeof(DirectoryEntry);
+    unsigned int oldSize = dirInode.size;
+    unsigned int newSize = oldSize + sizeof(DirectoryEntry);
 
-    char* buffer = new char[newSize];
-    memset(buffer, 0, newSize);
+    // Build merged buffer
+    char* buf = new char[newSize];
+    memset(buf, 0, newSize);
 
-    // Read existing entries into buffer
-    if (dirInode.size > 0) {
-        unsigned int blocksToRead = (dirInode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        unsigned int bytesRead = 0;
-
-        for (unsigned int i = 0; i < blocksToRead && i < DIRECT_BLOCKS; i++) {
-            if (dirInode.directBlocks[i] != NULL_BLOCK) {
-                unsigned int bytesToRead = (dirInode.size - bytesRead < BLOCK_SIZE) ?
-                                          (dirInode.size - bytesRead) : BLOCK_SIZE;
-                blockMgr->readBlock(dirInode.directBlocks[i], buffer + bytesRead, bytesToRead);
-                bytesRead += bytesToRead;
-            }
+    if (oldSize > 0) {
+        unsigned int loaded;
+        char* existing = loadEntries(dirInodeNumber, loaded);
+        if (existing) {
+            memcpy(buf, existing, loaded);
+            delete[] existing;
         }
     }
+    memcpy(buf + oldSize, &newEntry, sizeof(DirectoryEntry));
 
-    // Append new entry
-    memcpy(buffer + dirInode.size, &newEntry, sizeof(DirectoryEntry));
-
-    unsigned int blocksNeeded = (newSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-    if (blocksNeeded > DIRECT_BLOCKS) {
-        cerr << "[DirectoryHandler] ERROR: Directory too large" << endl;
-        delete[] buffer;
-        return false;
-    }
-
-    // Allocate new blocks if needed
-    for (unsigned int i = 0; i < blocksNeeded; i++) {
-        if (dirInode.directBlocks[i] == NULL_BLOCK) {
-            int blockNum = blockMgr->allocateBlock();
-            if (blockNum == -1) {
-                cerr << "[DirectoryHandler] ERROR: Failed to allocate block" << endl;
-                delete[] buffer;
-                return false;
-            }
-            dirInode.directBlocks[i] = blockNum;
-            dirInode.blockCount++;
-        }
-    }
-
-    // Write data to blocks
-    unsigned int bytesWritten = 0;
-    for (unsigned int i = 0; i < blocksNeeded; i++) {
-        unsigned int bytesToWrite = (newSize - bytesWritten < BLOCK_SIZE) ?
-                                    (newSize - bytesWritten) : BLOCK_SIZE;
-        blockMgr->writeBlock(dirInode.directBlocks[i], buffer + bytesWritten, bytesToWrite);
-        bytesWritten += bytesToWrite;
-    }
-
-    dirInode.size = newSize;
-    dirInode.modifiedTime = time(nullptr);
-
-    if (!inodeMgr->writeInode(dirInodeNumber, dirInode)) {
-        cerr << "[DirectoryHandler] ERROR: Failed to update directory inode" << endl;
-        delete[] buffer;
-        return false;
-    }
-
-    delete[] buffer;
-    // cout << "[DirectoryHandler] Entry added successfully" << endl;
-    return true;
+    bool ok = flushEntries(dirInodeNumber, buf, newSize, dirInode);
+    delete[] buf;
+    return ok;
 }
 
-// Remove an entry from a directory
 bool DirectoryHandler::removeEntry(unsigned int dirInodeNumber, const string& name) {
-    // cout << "[DirectoryHandler] Removing entry '" << name << "' from directory (inode #"
-    //      << dirInodeNumber << ")" << endl;
-
     vector<DirectoryEntry> entries = listDirectory(dirInodeNumber);
 
     bool found = false;
-    vector<DirectoryEntry> newEntries;
-
-    for (const DirectoryEntry& entry : entries) {
-        if (string(entry.name) == name) {
-            found = true;
-        } else {
-            newEntries.push_back(entry);
-        }
+    vector<DirectoryEntry> remaining;
+    for (const DirectoryEntry& e : entries) {
+        if (string(e.name) == name) { found = true; }
+        else                        { remaining.push_back(e); }
     }
 
     if (!found) {
-        cerr << "[DirectoryHandler] ERROR: Entry '" << name << "' not found" << endl;
+        cerr << "[DirectoryHandler] ERROR: '" << name << "' not found" << endl;
         return false;
     }
 
     Inode dirInode;
-    if (!inodeMgr->readInode(dirInodeNumber, dirInode)) {
-        return false;
+    if (!inodeMgr->readInode(dirInodeNumber, dirInode)) return false;
+
+    unsigned int newSize = (unsigned int)(remaining.size() * sizeof(DirectoryEntry));
+    char* buf = new char[newSize > 0 ? newSize : 1];
+    memset(buf, 0, newSize > 0 ? newSize : 1);
+
+    for (size_t i = 0; i < remaining.size(); i++) {
+        memcpy(buf + i * sizeof(DirectoryEntry), &remaining[i], sizeof(DirectoryEntry));
     }
 
-    unsigned int newSize = newEntries.size() * sizeof(DirectoryEntry);
-
-    char* buffer = new char[newSize > 0 ? newSize : 1];
-    memset(buffer, 0, newSize > 0 ? newSize : 1);
-
-    for (size_t i = 0; i < newEntries.size(); i++) {
-        memcpy(buffer + (i * sizeof(DirectoryEntry)), &newEntries[i], sizeof(DirectoryEntry));
-    }
-
-    if (newSize > 0) {
-        unsigned int blocksNeeded = (newSize + BLOCK_SIZE - 1) / BLOCK_SIZE;
-        unsigned int bytesWritten = 0;
-
-        for (unsigned int i = 0; i < blocksNeeded && i < DIRECT_BLOCKS; i++) {
-            unsigned int bytesToWrite = (newSize - bytesWritten < BLOCK_SIZE) ?
-                                        (newSize - bytesWritten) : BLOCK_SIZE;
-            blockMgr->writeBlock(dirInode.directBlocks[i], buffer + bytesWritten, bytesToWrite);
-            bytesWritten += bytesToWrite;
-        }
-    }
-
-    dirInode.size = newSize;
-    dirInode.modifiedTime = time(nullptr);
-    inodeMgr->writeInode(dirInodeNumber, dirInode);
-
-    delete[] buffer;
-    // cout << "[DirectoryHandler] Entry removed successfully" << endl;
-    return true;
+    bool ok = flushEntries(dirInodeNumber, buf, newSize, dirInode);
+    delete[] buf;
+    return ok;
 }
 
-// Find an entry by name — returns inode number or -1
 int DirectoryHandler::findEntry(unsigned int dirInodeNumber, const string& name) {
     vector<DirectoryEntry> entries = listDirectory(dirInodeNumber);
-
-    for (const DirectoryEntry& entry : entries) {
-        if (string(entry.name) == name) {
-            return entry.inodeNumber;
-        }
+    for (const DirectoryEntry& e : entries) {
+        if (string(e.name) == name) return (int)e.inodeNumber;
     }
-
     return -1;
 }
 
-// List all entries in a directory
 vector<DirectoryEntry> DirectoryHandler::listDirectory(unsigned int dirInodeNumber) {
     vector<DirectoryEntry> entries;
+    if (!inodeMgr->inodeExists(dirInodeNumber)) return entries;
 
-    if (!inodeMgr->inodeExists(dirInodeNumber)) {
-        return entries;
+    unsigned int size;
+    char* buf = loadEntries(dirInodeNumber, size);
+    if (!buf || size == 0) { delete[] buf; return entries; }
+
+    unsigned int count = size / sizeof(DirectoryEntry);
+    for (unsigned int i = 0; i < count; i++) {
+        DirectoryEntry e;
+        memcpy(&e, buf + i * sizeof(DirectoryEntry), sizeof(DirectoryEntry));
+        entries.push_back(e);
     }
-
-    Inode dirInode;
-    if (!inodeMgr->readInode(dirInodeNumber, dirInode)) {
-        return entries;
-    }
-
-    if (dirInode.size == 0) {
-        return entries;
-    }
-
-    char* buffer = new char[dirInode.size];
-    memset(buffer, 0, dirInode.size);
-
-    unsigned int blocksToRead = (dirInode.size + BLOCK_SIZE - 1) / BLOCK_SIZE;
-    unsigned int bytesRead = 0;
-
-    for (unsigned int i = 0; i < blocksToRead && i < DIRECT_BLOCKS; i++) {
-        if (dirInode.directBlocks[i] != NULL_BLOCK) {
-            unsigned int bytesToRead = (dirInode.size - bytesRead < BLOCK_SIZE) ?
-                                      (dirInode.size - bytesRead) : BLOCK_SIZE;
-            blockMgr->readBlock(dirInode.directBlocks[i], buffer + bytesRead, bytesToRead);
-            bytesRead += bytesToRead;
-        }
-    }
-
-    unsigned int entryCount = dirInode.size / sizeof(DirectoryEntry);
-
-    for (unsigned int i = 0; i < entryCount; i++) {
-        DirectoryEntry entry;
-        memcpy(&entry, buffer + (i * sizeof(DirectoryEntry)), sizeof(DirectoryEntry));
-        entries.push_back(entry);
-    }
-
-    delete[] buffer;
+    delete[] buf;
     return entries;
 }
 
-// Check if directory is empty
 bool DirectoryHandler::isEmpty(unsigned int dirInodeNumber) {
     return getEntryCount(dirInodeNumber) == 0;
 }
 
-// Get entry count
 unsigned int DirectoryHandler::getEntryCount(unsigned int dirInodeNumber) {
-    Inode dirInode;
-    if (!inodeMgr->readInode(dirInodeNumber, dirInode)) {
-        return 0;
-    }
-    return dirInode.size / sizeof(DirectoryEntry);
+    Inode inode;
+    if (!inodeMgr->readInode(dirInodeNumber, inode)) return 0;
+    return inode.size / sizeof(DirectoryEntry);
 }
 
-// ── NEW: SEARCH ───────────────────────────────────────────────────────────────
+// ── Search ────────────────────────────────────────────────────────────────────
 
-// Recursive DFS helper
-// dirInode     - inode of the directory being scanned
-// target       - name to match (case-sensitive)
-// currentPath  - path string of 'dirInode' (e.g. "/docs")
-// matchFiles   - include regular files in results
-// matchDirs    - include directories in results
-// results      - growing list of full paths that match
 void DirectoryHandler::searchRecursive(unsigned int dirInode,
                                        const string& target,
                                        const string& currentPath,
@@ -326,47 +235,24 @@ void DirectoryHandler::searchRecursive(unsigned int dirInode,
                                        bool matchDirs,
                                        vector<string>& results) {
     vector<DirectoryEntry> entries = listDirectory(dirInode);
+    for (const DirectoryEntry& e : entries) {
+        string eName = string(e.name);
+        string full  = (currentPath == "/") ? ("/" + eName) : (currentPath + "/" + eName);
 
-    for (const DirectoryEntry& entry : entries) {
-        string entryName = string(entry.name);
-        string fullPath  = (currentPath == "/") ? ("/" + entryName)
-                                                : (currentPath + "/" + entryName);
-
-        // Check if this entry's name matches
-        if (entryName == target) {
-            bool isDir  = (entry.fileType == TYPE_DIRECTORY);
-            bool isFile = (entry.fileType == TYPE_FILE);
-
-            if ((isFile && matchFiles) || (isDir && matchDirs)) {
-                results.push_back(fullPath);
-            }
+        if (eName == target) {
+            bool isDir  = (e.fileType == TYPE_DIRECTORY);
+            bool isFile = (e.fileType == TYPE_FILE);
+            if ((isFile && matchFiles) || (isDir && matchDirs)) results.push_back(full);
         }
 
-        // Recurse into sub-directories
-        if (entry.fileType == TYPE_DIRECTORY) {
-            searchRecursive(entry.inodeNumber, target, fullPath,
-                            matchFiles, matchDirs, results);
+        if (e.fileType == TYPE_DIRECTORY) {
+            searchRecursive(e.inodeNumber, target, full, matchFiles, matchDirs, results);
         }
     }
 }
 
-// Public search entry point — searches from root (inode 0)
-vector<string> DirectoryHandler::search(const string& name,
-                                        bool matchFiles,
-                                        bool matchDirs) {
+vector<string> DirectoryHandler::search(const string& name, bool matchFiles, bool matchDirs) {
     vector<string> results;
-
-    if (name.empty()) {
-        return results;
-    }
-
-    // cout << "[DirectoryHandler] Searching for '" << name << "' ..." << endl;
-
-    // Always start from root (inode 0)
-    searchRecursive(0, name, "/", matchFiles, matchDirs, results);
-
-    // cout << "[DirectoryHandler] Search complete. Found " << results.size()
-    //      << " match(es)." << endl;
-
+    if (!name.empty()) searchRecursive(0, name, "/", matchFiles, matchDirs, results);
     return results;
 }
