@@ -2,19 +2,23 @@
 
 CXX      = g++
 CXXFLAGS = -std=c++11 -Wall -Wextra -g
-TARGET   = ext2sim
+INCDIR   = include
+SRCDIR   = src
+BUILDDIR = build
+TARGET   = $(BUILDDIR)/ext2sim
 
-OBJS = VirtualDisk.o       \
-       BitmapManager.o     \
-       SuperblockManager.o \
-       InodeManager.o      \
-       BlockManager.o      \
-       EncryptionManager.o \
-       FileManager.o       \
-       DirectoryHandler.o  \
-       PathParser.o        \
-       Logger.o            \
-       main.o
+OBJS = $(BUILDDIR)/VirtualDisk.o       \
+       $(BUILDDIR)/BitmapManager.o     \
+       $(BUILDDIR)/SuperblockManager.o \
+       $(BUILDDIR)/InodeManager.o      \
+       $(BUILDDIR)/BlockManager.o      \
+       $(BUILDDIR)/EncryptionManager.o \
+       $(BUILDDIR)/FileManager.o       \
+       $(BUILDDIR)/DirectoryHandler.o  \
+       $(BUILDDIR)/PathParser.o        \
+       $(BUILDDIR)/Logger.o            \
+       $(BUILDDIR)/ShellHelper.o       \
+       $(BUILDDIR)/main.o
 
 all: $(TARGET)
 
@@ -22,46 +26,52 @@ $(TARGET): $(OBJS)
 	$(CXX) $(CXXFLAGS) -o $(TARGET) $(OBJS)
 	@echo "Build complete: $(TARGET)"
 
-VirtualDisk.o: VirtualDisk.cpp VirtualDisk.h
-	$(CXX) $(CXXFLAGS) -c VirtualDisk.cpp
+$(BUILDDIR)/VirtualDisk.o: $(SRCDIR)/VirtualDisk.cpp $(INCDIR)/VirtualDisk.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-BitmapManager.o: BitmapManager.cpp BitmapManager.h VirtualDisk.h Ext2Structs.h
-	$(CXX) $(CXXFLAGS) -c BitmapManager.cpp
+$(BUILDDIR)/BitmapManager.o: $(SRCDIR)/BitmapManager.cpp $(INCDIR)/BitmapManager.h $(INCDIR)/VirtualDisk.h $(INCDIR)/Ext2Structs.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-SuperblockManager.o: SuperblockManager.cpp SuperblockManager.h VirtualDisk.h Ext2Structs.h
-	$(CXX) $(CXXFLAGS) -c SuperblockManager.cpp
+$(BUILDDIR)/SuperblockManager.o: $(SRCDIR)/SuperblockManager.cpp $(INCDIR)/SuperblockManager.h $(INCDIR)/VirtualDisk.h $(INCDIR)/Ext2Structs.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-InodeManager.o: InodeManager.cpp InodeManager.h VirtualDisk.h Ext2Structs.h BitmapManager.h SuperblockManager.h
-	$(CXX) $(CXXFLAGS) -c InodeManager.cpp
+$(BUILDDIR)/InodeManager.o: $(SRCDIR)/InodeManager.cpp $(INCDIR)/InodeManager.h $(INCDIR)/VirtualDisk.h $(INCDIR)/Ext2Structs.h $(INCDIR)/BitmapManager.h $(INCDIR)/SuperblockManager.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-BlockManager.o: BlockManager.cpp BlockManager.h VirtualDisk.h Ext2Structs.h BitmapManager.h SuperblockManager.h
-	$(CXX) $(CXXFLAGS) -c BlockManager.cpp
+$(BUILDDIR)/BlockManager.o: $(SRCDIR)/BlockManager.cpp $(INCDIR)/BlockManager.h $(INCDIR)/VirtualDisk.h $(INCDIR)/Ext2Structs.h $(INCDIR)/BitmapManager.h $(INCDIR)/SuperblockManager.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-EncryptionManager.o: EncryptionManager.cpp EncryptionManager.h
-	$(CXX) $(CXXFLAGS) -c EncryptionManager.cpp
+$(BUILDDIR)/EncryptionManager.o: $(SRCDIR)/EncryptionManager.cpp $(INCDIR)/EncryptionManager.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-FileManager.o: FileManager.cpp FileManager.h VirtualDisk.h Ext2Structs.h InodeManager.h BlockManager.h EncryptionManager.h
-	$(CXX) $(CXXFLAGS) -c FileManager.cpp
+$(BUILDDIR)/FileManager.o: $(SRCDIR)/FileManager.cpp $(INCDIR)/FileManager.h $(INCDIR)/InodeManager.h $(INCDIR)/BlockManager.h $(INCDIR)/EncryptionManager.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-DirectoryHandler.o: DirectoryHandler.cpp DirectoryHandler.h VirtualDisk.h Ext2Structs.h InodeManager.h BlockManager.h FileManager.h PathParser.h
-	$(CXX) $(CXXFLAGS) -c DirectoryHandler.cpp
+$(BUILDDIR)/DirectoryHandler.o: $(SRCDIR)/DirectoryHandler.cpp $(INCDIR)/DirectoryHandler.h $(INCDIR)/InodeManager.h $(INCDIR)/BlockManager.h $(INCDIR)/FileManager.h $(INCDIR)/PathParser.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-PathParser.o: PathParser.cpp PathParser.h
-	$(CXX) $(CXXFLAGS) -c PathParser.cpp
+$(BUILDDIR)/PathParser.o: $(SRCDIR)/PathParser.cpp $(INCDIR)/PathParser.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-Logger.o: Logger.cpp Logger.h
-	$(CXX) $(CXXFLAGS) -c Logger.cpp
+$(BUILDDIR)/Logger.o: $(SRCDIR)/Logger.cpp $(INCDIR)/Logger.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
-main.o: main.cpp VirtualDisk.h Ext2Structs.h BitmapManager.h SuperblockManager.h \
-        InodeManager.h BlockManager.h FileManager.h DirectoryHandler.h PathParser.h \
-        EncryptionManager.h Logger.h
-	$(CXX) $(CXXFLAGS) -c main.cpp
+$(BUILDDIR)/ShellHelper.o: $(SRCDIR)/ShellHelper.cpp $(INCDIR)/ShellHelper.h $(INCDIR)/Ext2Structs.h $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
+
+$(BUILDDIR)/main.o: $(SRCDIR)/main.cpp $(INCDIR)/VirtualDisk.h $(INCDIR)/Ext2Structs.h \
+        $(INCDIR)/BitmapManager.h $(INCDIR)/SuperblockManager.h \
+        $(INCDIR)/InodeManager.h $(INCDIR)/BlockManager.h $(INCDIR)/FileManager.h \
+        $(INCDIR)/DirectoryHandler.h $(INCDIR)/PathParser.h \
+        $(INCDIR)/EncryptionManager.h $(INCDIR)/Logger.h $(INCDIR)/ShellHelper.h \
+        $(INCDIR)/Constants.h
+	$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
 
 clean:
-	rm -f $(OBJS) $(TARGET) disk.img fs_log.txt
+	rm -f $(BUILDDIR)/*.o $(TARGET) disk.img fs_log.txt
 	@echo "Clean complete"
 
 run: $(TARGET)
-	./$(TARGET)
+	$(TARGET)
 
 .PHONY: all clean run
